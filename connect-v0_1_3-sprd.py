@@ -12,8 +12,8 @@ logPrc = logging.getLogger('johnprice')
 logMsg.setLevel(logging.DEBUG)
 logPrc.setLevel(logging.INFO)
 
-logPrc_handler = logging.FileHandler('log-price.txt')
-logMsg_handler = logging.FileHandler('log-msgs.txt')
+logPrc_handler = logging.FileHandler('log-prc-sprd.txt')
+logMsg_handler = logging.FileHandler('log-msgs-sprd.txt')
 stdout_handler = logging.StreamHandler()
 
 fmt = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
