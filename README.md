@@ -1,5 +1,7 @@
 # dtc-py
 
-For conda environment:\n
-conda install -c conda-forge trio\n 
-conda install -c conda-forge protobuf\n
+For conda environment:
+
+  conda install -c conda-forge trio
+
+  conda install -c conda-forge protobuf
