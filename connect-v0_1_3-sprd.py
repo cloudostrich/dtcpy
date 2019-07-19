@@ -9,7 +9,7 @@ import ssl
 
 logMsg = logging.getLogger('johndtc')
 logPrc = logging.getLogger('johnprice')
-logMsg.setLevel(logging.DEBUG)
+logMsg.setLevel(logging.INFO)
 logPrc.setLevel(logging.INFO)
 
 logPrc_handler = logging.FileHandler('log-prc-sprd.txt')
@@ -137,7 +137,7 @@ async def heartbeater(client_stream, heartbeat_interval):
     logMsg.info("Heartbeater started")
     hrtbt = Dtc.Heartbeat()
     while True:
-        logMsg.info('Sending Heartbeat')
+        logMsg.debug('Sending Heartbeat')
         await send_message(hrtbt, Dtc.HEARTBEAT,client_stream)
         await trio.sleep(heartbeat_interval)
 
@@ -149,9 +149,9 @@ async def send_message(m, m_type, client_stream):
     total_len = 4 + m.ByteSize()
     header = struct.pack('HH', total_len, m_type)
     binary_message = m.SerializeToString()
-    logMsg.info('sending: %s',m_type)
+    logMsg.debug('sending: %s',m_type)
     await client_stream.send_all(header + binary_message)
-    logMsg.info("Sent : %s", m_type)
+    logMsg.debug("Sent : %s", m_type)
         
 async def mkt_updater(client_stream):
     logMsg.info("mkt_updater started")
