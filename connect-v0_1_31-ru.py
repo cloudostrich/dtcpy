@@ -247,7 +247,6 @@ async def parent(addr, encoding, heartbeat_interval):
             # trigger
             logMsg.info("parent: spawning trigger...")
             nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream)
-            logMsg.info("spawned trigger ...")
 
             # mkt data request
             rl = [(101, 'F.US.ZFTQ19', 'SGX'), (102, 'F.US.ZFTU19', 'SGX'), (103, 'F.US.ZFTV19', 'SGX'), (104, 'F.US.ZFTX19', 'SGX'), (105, 'F.US.ZFTZ19', 'SGX'), (106, 'F.US.ZFTF20', 'SGX'), (107, 'F.US.ZFTG20', 'SGX'), (108, 'F.US.ZFTH20', 'SGX'), (109, 'F.US.ZFTJ20', 'SGX'), (110, 'F.US.ZFTK20', 'SGX'), (111, 'F.US.ZFTM20', 'SGX'), (112, 'F.US.ZFTN20', 'SGX')]
@@ -283,9 +282,9 @@ PORT = 11099
 BUFSIZE = 1024
 FLAG = 1
 addr0 = ("127.0.0.1", 11099)
-addr1 = ("192.168.1.100", 11099)
+
 encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
 heartbeat_interval = 10
 event = trio.Event()
-trio.run(parent, addr1, encoding, heartbeat_interval)
+trio.run(parent, addr0, encoding, heartbeat_interval)

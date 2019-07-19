@@ -247,7 +247,6 @@ async def parent(addr, encoding, heartbeat_interval):
             # trigger
             logMsg.info("parent: spawning trigger...")
             nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream)
-            logMsg.info("spawned trigger ...")
 
             # mkt data request
             sl = [(1501, 'F.US.ZFTS1Q19', 'SGX'), (1502, 'F.US.ZFTS2Q19', 'SGX'), (1503, 'F.US.ZFTS3Q19', 'SGX'), (1504, 'F.US.ZFTS4Q19', 'SGX'), (1505, 'F.US.ZFTS5Q19', 'SGX'), (1506, 'F.US.ZFTS6Q19', 'SGX'), (1507, 'F.US.ZFTS7Q19', 'SGX'), (1508, 'F.US.ZFTS8Q19', 'SGX'), (1509, 'F.US.ZFTS9Q19', 'SGX'), (1510, 'F.US.ZFTS10Q19', 'SGX'), (1511, 'F.US.ZFTS11Q19', 'SGX'), (1512, 'F.US.ZFTS1U19', 'SGX'), (1513, 'F.US.ZFTS2U19', 'SGX'), (1514, 'F.US.ZFTS3U19', 'SGX'), (1515, 'F.US.ZFTS4U19', 'SGX'), (1516, 'F.US.ZFTS5U19', 'SGX'), (1517, 'F.US.ZFTS6U19', 'SGX'), (1518, 'F.US.ZFTS7U19', 'SGX'), (1519, 'F.US.ZFTS8U19', 'SGX'), (1520, 'F.US.ZFTS9U19', 'SGX'), (1521, 'F.US.ZFTS10U19', 'SGX'), (1522, 'F.US.ZFTS1V19', 'SGX'), (1523, 'F.US.ZFTS2V19', 'SGX'), (1524, 'F.US.ZFTS3V19', 'SGX'), (1525, 'F.US.ZFTS4V19', 'SGX'), (1526, 'F.US.ZFTS5V19', 'SGX'), (1527, 'F.US.ZFTS6V19', 'SGX'), (1528, 'F.US.ZFTS7V19', 'SGX'), (1529, 'F.US.ZFTS8V19', 'SGX'), (1530, 'F.US.ZFTS9V19', 'SGX'), (1531, 'F.US.ZFTS1X19', 'SGX'), (1532, 'F.US.ZFTS2X19', 'SGX'), (1533, 'F.US.ZFTS3X19', 'SGX'), (1534, 'F.US.ZFTS4X19', 'SGX'), (1535, 'F.US.ZFTS5X19', 'SGX'), (1536, 'F.US.ZFTS6X19', 'SGX'), (1537, 'F.US.ZFTS7X19', 'SGX'), (1538, 'F.US.ZFTS8X19', 'SGX'), (1539, 'F.US.ZFTS1Z19', 'SGX'), (1540, 'F.US.ZFTS2Z19', 'SGX'), (1541, 'F.US.ZFTS3Z19', 'SGX'), (1542, 'F.US.ZFTS4Z19', 'SGX'), (1543, 'F.US.ZFTS5Z19', 'SGX'), (1544, 'F.US.ZFTS6Z19', 'SGX'), (1545, 'F.US.ZFTS7Z19', 'SGX'), (1546, 'F.US.ZFTS1F20', 'SGX'), (1547, 'F.US.ZFTS2F20', 'SGX'), (1548, 'F.US.ZFTS3F20', 'SGX'), (1549, 'F.US.ZFTS4F20', 'SGX'), (1550, 'F.US.ZFTS5F20', 'SGX'), (1551, 'F.US.ZFTS6F20', 'SGX'), (1552, 'F.US.ZFTS1G20', 'SGX'), (1553, 'F.US.ZFTS2G20', 'SGX'), (1554, 'F.US.ZFTS3G20', 'SGX'), (1555, 'F.US.ZFTS4G20', 'SGX'), (1556, 'F.US.ZFTS5G20', 'SGX'), (1557, 'F.US.ZFTS1H20', 'SGX'), (1558, 'F.US.ZFTS2H20', 'SGX'), (1559, 'F.US.ZFTS3H20', 'SGX'), (1560, 'F.US.ZFTS4H20', 'SGX'), (1561, 'F.US.ZFTS1J20', 'SGX'), (1562, 'F.US.ZFTS2J20', 'SGX'), (1563, 'F.US.ZFTS3J20', 'SGX'), (1564, 'F.US.ZFTS1K20', 'SGX'), (1565, 'F.US.ZFTS2K20', 'SGX'), (1566, 'F.US.ZFTS1M20', 'SGX')]
@@ -283,9 +282,9 @@ PORT = 11099
 BUFSIZE = 1024
 FLAG = 1
 addr0 = ("127.0.0.1", 11099)
-addr1 = ("192.168.1.100", 11099)
+
 encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
 heartbeat_interval = 10
 event = trio.Event()
-trio.run(parent, addr1, encoding, heartbeat_interval)
+trio.run(parent, addr0, encoding, heartbeat_interval)
