@@ -347,8 +347,7 @@ PORT = 11099
 BUFSIZE = 1024
 FLAG = 1
 addr0 = ("127.0.0.1", 11099)
-addr1 = ("192.168.1.100", 11099)
-addr1_hist = ("192.168.1.100", 11098)
+
 encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
 heartbeat_interval = 10

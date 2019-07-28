@@ -193,7 +193,7 @@ def quit():
 
 # Set main params for conn
 addr = ("127.0.0.1", 11099)
-addr1 = ("192.168.1.100", 11099)
+
 encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
 sock = socket.create_connection(addr1)

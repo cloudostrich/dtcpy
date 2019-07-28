@@ -223,9 +223,9 @@ async def parent(addr, encoding, heartbeat_interval):
     global event
     logMsg.info(f"parent: connecting to {addr[0]}:{addr[1]}")
     logStdout.info(f"parent: connecting to {addr[0]}:{addr[1]}")
-    # client_stream = await trio.open_tcp_stream(addr[0], addr[1])
-    client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], 
-        ssl_context=ssl.SSLContext())
+    client_stream = await trio.open_tcp_stream(addr[0], addr[1])
+    # client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], 
+    #     ssl_context=ssl.SSLContext())
     
     async with client_stream:
         # encoding request
