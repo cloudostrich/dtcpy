@@ -348,9 +348,10 @@ PORT = 11099
 BUFSIZE = 1024
 FLAG = 1
 addr0 = ("127.0.0.1", 11099)
+addr0_hist = ("127.0.0.1", 11098)
 
 encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
 heartbeat_interval = 10
 event = trio.Event()
-trio.run(parent, addr1_hist, encoding, heartbeat_interval)
+trio.run(parent, addr0_hist, encoding, heartbeat_interval)
