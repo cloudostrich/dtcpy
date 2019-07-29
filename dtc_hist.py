@@ -201,17 +201,18 @@ async def hist_downloader(client_stream):
     logMsg.debug("hist_downloader started")
     logStdout.info("hist_downloader started")
     while True:
-        # mtype, data = await get_response(client_stream)
-        response = await client_stream.receive_some(1024)
-        m_size = struct.unpack_from('<H', response[:2])[0] # the size of message
-        m_type = struct.unpack_from('<H', response[2:4])[0] # the type of the message
-        m_body = response[4:]
-        m_type = DTC_MTYPE_MAP[m_type]
-        print('HEEYYY: M-TYPE is: ', m_type)
-        print('M-BODY :', m_body)
-        m_resp = m_type[3]()
-        m_resp.ParseFromString(m_body)
+        # header = client_stream.recv(4)
+        # m_size = struct.unpack_from('<H', header[:2])[0]
+        # m_type = struct.unpack_from('<H', header[2:4])[0]
+        # m_body = client_stream.recv(m_size - 4)
+        
+        # m_type = DTC_MTYPE_MAP[m_type]
+        # print('HEEYYY: M-TYPE is: ', m_type)
+        # print('M-BODY :', m_body)
+        # m_resp = m_type[3]()
+        # m_resp.ParseFromString(m_body)
         # logMsg.info(f"mkt_updater: got data {data}")
+        m_type, data = await get_response(client_stream)
         data = chekker2(data)
         # logPrc.info("%s, %s",mtype,data)
         logMsg.debug("%s, %s",m_type,data)
