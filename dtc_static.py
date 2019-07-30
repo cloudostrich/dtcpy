@@ -11,8 +11,24 @@ import logging
 import DTC_Files.DTCProtocol_pb2 as Dtc
 import ssl
 
-log = logging.getLogger("mydtc")
-log.setLevel(logging.INFO)
+# Standar loggers for all functions
+logMsg = logging.getLogger('johndtc')
+logStdout = logging.getLogger('johnstdout')
+
+logMsg.setLevel(logging.DEBUG)
+logStdout.setLevel(logging.DEBUG)
+
+logMsg_handler = logging.FileHandler('log-msgs.txt')
+stdout_handler = logging.StreamHandler()
+
+fmtMsg = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
+fmtStdout = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
+
+logMsg_handler.setFormatter(fmtMsg)
+stdout_handler.setFormatter(fmtStdout)
+
+logMsg.addHandler(logMsg_handler)
+logStdout.addHandler(stdout_handler)
 
 # Mapping message type to DTC message object and human readable name
 DTC_MTYPE_MAP = {
@@ -95,7 +111,7 @@ TYPE_TO_STRUCT_FORMAT = {
     10: "s"  # CPPTYPE_MESSAGE; TODO: this is an assumption, needs review
 }
 
-
+# Helper Functions
 def construct_message(m, message_type): 
     """ Prepends message size and type, appends ProtocolType and packs it to binary 
     Args: 
@@ -107,7 +123,8 @@ def construct_message(m, message_type):
     total_len = 4 + m.ByteSize()  # 2 bytes Size + 2 bytes Type 
     header = struct.pack('<HH', total_len, message_type)  # Prepare 4-byte little-endian header 
     binary_message = m.SerializeToString() 
-    print('sending :', binary_message)
+    logStdout.info('sending: %s',binary_message)
+    logMsg.debug('sending: %s',binary_message)
     return header + binary_message 
 
 def chekker(m):
@@ -122,18 +139,53 @@ def send_message(m, m_type, sock):
     header = struct.pack('HH', total_len, m_type)
     binary_message = m.SerializeToString()
     sock.send(header + binary_message)
-    print('sending: ',m_type)
-    if log.level <= logging.DEBUG:
-        log.debug("Sent {0}".format(m_type))
+    logStdout.info('sending: %s',m_type)
+    logMsg.debug('sending: %s',m_type)
 
-def create_enc_req(encoding):
+def get_message(sock):
+    header = sock.recv(4)
+    m_size = struct.unpack_from('<H', header[:2])[0]
+    m_type = struct.unpack_from('<H', header[2:4])[0]
+    m_body = sock.recv(m_size - 4)
+
+    m_type = DTC_MTYPE_MAP[m_type]
+    m_resp = m_type[3]()
+    m_resp.ParseFromString(m_body)
+    logStdout.debug("%s",m_resp)
+    return m_type, m_resp
+
+def chekker2(m):
+    pktp = tuple(getattr(m,f.name) for f in m.DESCRIPTOR.fields)
+    return pktp
+    
+def quit(sock):
+    """ Gracefully logoff and close the connection """
+    logStdout.debug("Disconnecting from DTC server")
+    logMsg.debug("Disconnecting from DTC server")
+    # receiver.stop()
+    # heartbeat.stop()
+    logoff = Dtc.Logoff()
+    logoff.Reason = "Client terminating"
+    send_message(logoff, Dtc.LOGOFF, sock)
+    # Gracefully close the socket
+    sock.close()
+
+# connect+logon and Request Functions
+def conn1(addr, encoding=Dtc.PROTOCOL_BUFFERS, heartbeat_interval=10):
+    """ Primary function to connect and logon to DTC server""" 
+    sock = socket.create_connection(addr)
+    # encoding request, construct and send
     enc_req = Dtc.EncodingRequest()
     enc_req.Encoding = encoding
     enc_req.ProtocolType = "DTC"
     enc_req.ProtocolVersion = Dtc.CURRENT_VERSION
-    return enc_req
+    send_message(enc_req, Dtc.ENCODING_REQUEST,sock) # send the encoding request
+    # receive encoding response
+    m_type, m_resp = get_message(sock)
+    logMsg.debug("%s, %s", m_type[0], m_resp)
+    logStdout.debug("%s, %s", m_type[0], m_resp)
 
-def create_logon_req(heartbeat_interval):
+    # Logon request, construct and send
     logon_req = Dtc.LogonRequest()
     logon_req.ProtocolVersion = Dtc.CURRENT_VERSION
     # logon_req.Username = "wat"
@@ -141,85 +193,68 @@ def create_logon_req(heartbeat_interval):
     logon_req.GeneralTextData = "John's Test"
     logon_req.HeartbeatIntervalInSeconds = heartbeat_interval
     logon_req.ClientName = "John_Tester"
-    return logon_req
+    send_message(logon_req, Dtc.LOGON_REQUEST,sock)
+    # receive logon response
+    m_type, m_resp = get_message(sock)
+    logMsg.debug("%s, %s", m_type[0], m_resp)
+    logStdout.debug("%s, %s", m_type[0], m_resp)
 
-def create_mktdat_req(symbolID, symbol, exchange):
-    data_req = Dtc.MarketDataRequest()
-    data_req.RequestAction = Dtc.SUBSCRIBE
-    data_req.SymbolID = symbolID  # Note: Make sure this is unique when requesting multiple symbols
-    data_req.Symbol = symbol
-    data_req.Exchange = exchange
-    return data_req
+    return sock
 
-def create_secdef_req(requestID, symbol, exchange):
+def create_logger(logfile):
+    """Create custom logger with own logfile for each DTC Request function"""
+    logRec = logging.getLogger('Req')
+    logRec.setLevel(logging.DEBUG)
+    logRec_handler = logging.FileHandler(logfile)
+    fmtRec = logging.Formatter("%(message)s")
+    logRec_handler.setFormatter(fmtRec)
+    logRec.addHandler(logRec_handler)
+    return logRec
+
+def secdef(requestID, symbol, exchange, sock, logfile):
+    """ Retrieve Security Definition for each symbol. 
+    Uses the Market port"""
+    # custom logger with own txt file
+    logRec = create_logger(logfile)
+
+    # Create sec def request
     data_req = Dtc.SecurityDefinitionForSymbolRequest()
-    # data_req.RequestAction = Dtc.SUBSCRIBE
     data_req.RequestID = requestID  # Note: Make sure this is unique when requesting multiple symbols
     data_req.Symbol = symbol
     data_req.Exchange = exchange
-    return data_req
+    # Send Request and log response
+    send_message(data_req, Dtc.SECURITY_DEFINITION_FOR_SYMBOL_REQUEST,sock)
+    m_type, m_resp = get_message(sock)
+    logRec.debug("%s, %s", m_type[0], m_resp)
+    logStdout.debug("%s, %s", m_type[0], m_resp)
+    quit(sock)
 
-def get_message(sock):
-    # response = sock.recv(1024)
-    # m_size = struct.unpack_from('<H', response[:2]) # the size of message
-    # m_type = struct.unpack_from('<H', response[2:4]) # the type of the message
-    # m_body = response[4:]
-    header = sock.recv(4)
-    m_size = struct.unpack_from('<H', header[:2])[0]
-    m_type = struct.unpack_from('<H', header[2:4])[0]
-    m_body = sock.recv(m_size - 4)
-    m_type = DTC_MTYPE_MAP[m_type]
-    m_resp = m_type[3]()
-    m_resp.ParseFromString(m_body)
-    # log.info("Parses: %s", m_resp.ParseFromString(m_body))
+def history(requestID, symbol, exchange, record_interval, sock, logfile, start=0, end=0, max=0):
+    """Retrieve Historical data direct from DTC"""
+    # custom logger with own txt file
+    logRec = create_logger(logfile)
 
-    # print('response: ', m_size, m_type, m_body,'response end')
-    # print('Parsed: ',m_resp.ParseFromString(m_body),'parse end')
-    print('raw resp: ', m_resp,'raw end')
-    # print('chekker: {0} \n chekked end'.format(chekker(m_resp)))
-
-def quit():
-    """ Gracefully logoff and close the connection """
-    print("Disconnect() started")
-    log.debug("Disconnecting from DTC server")
-    # receiver.stop()
-    # heartbeat.stop()
-    logoff = Dtc.Logoff()
-    logoff.Reason = "Client terminating"
-    send_message(logoff, Dtc.LOGOFF, ssl_sock)
-    # Gracefully close the socket
-    ssl_sock.close()
-
-
-# Set main params for conn
-addr = ("127.0.0.1", 11099)
-
-encoding = Dtc.PROTOCOL_BUFFERS
-# encoding = Dtc.BINARY_ENCODING
-sock = socket.create_connection(addr1)
-ssl_sock = ssl.wrap_socket(sock)
-heartbeat_interval = 10
-
-# Start message listener thread
-
-
-# encoding request, construct and send
-enc_req = create_enc_req(encoding)
-send_message(enc_req, Dtc.ENCODING_REQUEST,ssl_sock) # send the encoding request
-
-# receive encoding response
-get_message(ssl_sock)
-
-# Logon request, construct and send
-logon_req = create_logon_req(heartbeat_interval)
-send_message(logon_req, Dtc.LOGON_REQUEST,ssl_sock)
-
-# receive logon response
-get_message(ssl_sock)
-
-# secdef_req = create_secdef_req(888, 'F.US.CLEQ19', "Globex")
-secdef_req = create_secdef_req(888, 'F.US.ZFTU19', "SGX")
-send_message(secdef_req, Dtc.SECURITY_DEFINITION_FOR_SYMBOL_REQUEST,ssl_sock)
-get_message(ssl_sock)
-
-quit()
+    # Create Historical Data Request
+    data_req = Dtc.HistoricalPriceDataRequest()
+    data_req.RequestID = requestID  # Note: Make sure this is unique when requesting multiple symbols
+    data_req.Symbol = symbol
+    data_req.Exchange = exchange
+    data_req.RecordInterval = record_interval
+    data_req.StartDateTime = start
+    data_req.EndDateTime = end
+    data_req.MaxDaysToReturn = max
+    # Send Request and log Response_Header
+    send_message(data_req, Dtc.HISTORICAL_PRICE_DATA_REQUEST,sock)
+    m_type, m_resp = get_message(sock)
+    logRec.debug("%s, %s", m_type[0], m_resp)
+    logStdout.debug("%s, %s", m_type[0], m_resp)
+    # Get the rest/whole of the historical data
+    while True:
+        mt, mr = get_message(sock)
+        mr1 = chekker2(mr)
+        logRec.debug("%s, %s", mt[0], mr1)
+        logStdout.debug("%s, %s", mt[0], mr1)
+        if mt[0] == 'HISTORICAL_PRICE_DATA_RECORD_RESPONSE' and mr.IsFinalRecord:
+            logStdout.info('FINISH')
+            break
+    quit(sock)
