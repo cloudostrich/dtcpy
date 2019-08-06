@@ -5,31 +5,27 @@ import struct
 import logging
 import DTC_Files.DTCProtocol_pb2 as Dtc
 import termios, tty
-import ssl
+# import ssl
+# import subprocess
+# import datetime
 
 logMsg = logging.getLogger('johndtc')
-logPrc = logging.getLogger('johnprice')
 logStdout = logging.getLogger('johnstdout')
 
 logMsg.setLevel(logging.DEBUG)
-logPrc.setLevel(logging.INFO)
 logStdout.setLevel(logging.DEBUG)
 
-logPrc_handler = logging.FileHandler('log-price-ru.txt')
 logMsg_handler = logging.FileHandler('log-msgs-ru.txt')
 stdout_handler = logging.StreamHandler()
 
 fmtMsg = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
-fmtPrc = logging.Formatter("%(asctime)s,%(message)s")
 fmtStdout = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
 
-logPrc_handler.setFormatter(fmtPrc)
 logMsg_handler.setFormatter(fmtMsg)
 stdout_handler.setFormatter(fmtStdout)
 
 logMsg.addHandler(logMsg_handler)
 logStdout.addHandler(stdout_handler)
-logPrc.addHandler(logPrc_handler)
 
 # Mapping message type to DTC message object and human readable name
 DTC_MTYPE_MAP = {
@@ -112,22 +108,15 @@ TYPE_TO_STRUCT_FORMAT = {
     10: "s"  # CPPTYPE_MESSAGE; TODO: this is an assumption, needs review
 }
 
-def create_enc_req(encoding):
-    enc_req = Dtc.EncodingRequest()
-    enc_req.Encoding = encoding
-    enc_req.ProtocolType = "DTC"
-    enc_req.ProtocolVersion = Dtc.CURRENT_VERSION
-    return enc_req
-
-def create_logon_req(heartbeat_interval):
-    logon_req = Dtc.LogonRequest()
-    logon_req.ProtocolVersion = Dtc.CURRENT_VERSION
-    # logon_req.Username = "wat"
-    # logon_req.Password = "wat"
-    logon_req.GeneralTextData = "John's Test"
-    logon_req.HeartbeatIntervalInSeconds = heartbeat_interval
-    logon_req.ClientName = "John_Tester"
-    return logon_req
+def create_logger(logfile):
+    """Create custom logger with own logfile for each DTC Request function"""
+    logRec = logging.getLogger('Req')
+    logRec.setLevel(logging.DEBUG)
+    logRec_handler = logging.FileHandler(logfile)
+    fmtRec = logging.Formatter("%(asctime)s, %(message)s")
+    logRec_handler.setFormatter(fmtRec)
+    logRec.addHandler(logRec_handler)
+    return logRec
 
 def create_mktdat_req(symbolID, symbol, exchange):
     data_req = Dtc.MarketDataRequest()
@@ -157,14 +146,15 @@ async def send_message(m, m_type, client_stream):
     await client_stream.send_all(header + binary_message)
     logStdout.info("Sent : %s", m_type)
         
-async def mkt_updater(client_stream):
+async def mkt_updater(client_stream, logGer):
     logMsg.debug("mkt_updater started")
     logStdout.info("mkt_updater started")
+    buflen = 300
+    buf = []
     while True:
         mtype, data = await get_response(client_stream)
-        # logMsg.info(f"mkt_updater: got data {data}")
         data = chekker2(data)
-        logPrc.info("%s, %s",mtype,data)
+        logGer.info("%s, %s",mtype,data)
         await trio.sleep(0.001)
         # if not data:
         #     logMsg.info("mkt_updater: connection closed")
@@ -178,26 +168,8 @@ async def get_response(client_stream):
     m_type = DTC_MTYPE_MAP[m_type]
     m_resp = m_type[3]()
     m_resp.ParseFromString(m_body)
-
-    # logMsg.debug(m_type[0])
     logStdout.debug(m_type[0])
-    # logMsg.debug("m_size: %s ", m_size)
-    # logMsg.debug("m_body: %s ", m_body)
-    # logMsg.debug("type m_resp: %s ", m_type[3])
-    # logMsg.debug("  CHEKKER: %s", chekker(m_resp))
     return m_type[0],m_resp
-
-async def quit(sock):
-    """ Gracefully logoff and close the connection """
-    logMsg.info(" QUIT!!! : Gracefully logoff and close the connection ")
-    logStdout.info(" QUIT!!! : Gracefully logoff and close the connection ")
-    logoff = Dtc.Logoff()
-    logoff.Reason = "Client quit"
-    await send_message(logoff, Dtc.LOGOFF, sock)
-    # Gracefully close the socket
-    # sock.close()
-    logMsg.info('--------------------------------------------------------------')
-    logStdout.info('--------------------------------------------------------------')
 
 # -- NEW
 async def keyboard():
@@ -214,30 +186,45 @@ async def trigger(event,scope, sock):
     logMsg.info("  trigger waiting now...")
     logStdout.info("  trigger waiting now...")
     await event.wait()
-    logMsg.info("  !!! Trigger event!!!")
-    logStdout.info("  trigger waiting now...")
-    await quit(sock)
+    """ Gracefully logoff and close the connection """
+    logMsg.info(" QUIT!!! : Gracefully logoff and close the connection ")
+    logStdout.info(" QUIT!!! : Gracefully logoff and close the connection ")
+    logoff = Dtc.Logoff()
+    logoff.Reason = "John-Client quit"
+    await send_message(logoff, Dtc.LOGOFF, sock)
+    logMsg.info('--------------------------------------------------------------')
+    logStdout.info('--------------------------------------------------------------')
     scope.cancel()
 
-async def parent(addr, encoding, heartbeat_interval):
-    global event
+async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbeat_interval=10):
+    event = trio.Event()
+    logGer = create_logger(logfile)
     logMsg.info(f"parent: connecting to {addr[0]}:{addr[1]}")
     logStdout.info(f"parent: connecting to {addr[0]}:{addr[1]}")
     client_stream = await trio.open_tcp_stream(addr[0], addr[1])
-    # client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], 
-    #     ssl_context=ssl.SSLContext())
-    
+    # client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], ssl_context=ssl.SSLContext())
+
     async with client_stream:
         # encoding request
         logMsg.info("spawing encoding request ...")
-        enc_req = create_enc_req(encoding) # construct encoding request
+        # construct encoding request
+        enc_req = Dtc.EncodingRequest()
+        enc_req.Encoding = encoding
+        enc_req.ProtocolType = "DTC"
+        enc_req.ProtocolVersion = Dtc.CURRENT_VERSION
         await send_message(enc_req, Dtc.ENCODING_REQUEST,client_stream) # send encoding request
         response = await get_response(client_stream)
         logMsg.info("%s ", response)
 
         # # logon request
         logMsg.info("parent: spawing logon request ...")
-        logon_req = create_logon_req(heartbeat_interval)
+        logon_req = Dtc.LogonRequest()
+        logon_req.ProtocolVersion = Dtc.CURRENT_VERSION
+        # logon_req.Username = "wat"
+        # logon_req.Password = "wat"
+        logon_req.GeneralTextData = "John's Test"
+        logon_req.HeartbeatIntervalInSeconds = heartbeat_interval
+        logon_req.ClientName = "John_Tester"
         await send_message(logon_req, Dtc.LOGON_REQUEST, client_stream)
         response = await get_response(client_stream)
         logMsg.info("%s ", response)
@@ -247,44 +234,42 @@ async def parent(addr, encoding, heartbeat_interval):
             # trigger
             logMsg.info("parent: spawning trigger...")
             nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream)
+            logMsg.info("spawned trigger ...")
 
             # mkt data request
-            rl = [(101, 'F.US.ZFTQ19', 'SGX'), (102, 'F.US.ZFTU19', 'SGX'), (103, 'F.US.ZFTV19', 'SGX'), (104, 'F.US.ZFTX19', 'SGX'), (105, 'F.US.ZFTZ19', 'SGX'), (106, 'F.US.ZFTF20', 'SGX'), (107, 'F.US.ZFTG20', 'SGX'), (108, 'F.US.ZFTH20', 'SGX'), (109, 'F.US.ZFTJ20', 'SGX'), (110, 'F.US.ZFTK20', 'SGX'), (111, 'F.US.ZFTM20', 'SGX'), (112, 'F.US.ZFTN20', 'SGX')]
-            for m in rl:    
+            for m in symbols:    
                 data_req = create_mktdat_req(*m)
                 await send_message(data_req, Dtc.MARKET_DATA_REQUEST, client_stream)
                 response = await get_response(client_stream)
                 logMsg.info("%s ", response)
 
+
             logMsg.info("parent: spawning heartbeater ...")
             nursery.start_soon(heartbeater, client_stream, heartbeat_interval)
 
             logMsg.info("parent: spawning mkt_updater ...")
-            nursery.start_soon(mkt_updater, client_stream)
+            nursery.start_soon(mkt_updater, client_stream, logGer)
 
             # -- NEW
             async for key in keyboard():
                 if key == 'q':
                     # nursery.cancel_scope.cancel()
                     event.set()
-
+                    
             logMsg.info("parent: waiting for tasks to finish...")
             logStdout.info("parent: waiting for tasks to finish...")
-        # await quit(client_stream)
+
         logMsg.info("  Logoff Successful!!!")
         logStdout.info("  Logoff Successful!!!")
-    logMsg.info("  Socket Closed!!!")
-    logStdout.info("  Socket Closed!!!")
+
+    logMsg.info("  Socket Closed!!! --------------------------------------------------------")
+    logStdout.info("  Socket Closed!!!------------------------------------------------------")
 
 
 # Connection Params setup 
-PORT = 11099
-BUFSIZE = 1024
-FLAG = 1
-addr0 = ("127.0.0.1", 11099)
-
-encoding = Dtc.PROTOCOL_BUFFERS
+# addr0 = ("127.0.0.1", 11099)
+# encoding = Dtc.PROTOCOL_BUFFERS
 # encoding = Dtc.BINARY_ENCODING
-heartbeat_interval = 10
-event = trio.Event()
-trio.run(parent, addr0, encoding, heartbeat_interval)
+# heartbeat_interval = 10
+
+# trio.run(dtc_livelog1.parent, addr1, sym, "test_livelog1.txt")
