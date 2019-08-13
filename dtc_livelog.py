@@ -3,7 +3,7 @@ import sys
 import trio
 import struct
 import logging
-import DTC_Files.DTCProtocol_pb2 as Dtc
+import dtcpy.DTC_Files.DTCProtocol_pb2 as Dtc
 import termios, tty
 # import ssl
 # import subprocess
