@@ -9,22 +9,11 @@ import termios, tty
 # import subprocess
 # import datetime
 
-logMsg = logging.getLogger('johndtc')
 logStdout = logging.getLogger('johnstdout')
-
-logMsg.setLevel(logging.DEBUG)
 logStdout.setLevel(logging.DEBUG)
-
-logMsg_handler = logging.FileHandler('log-msgs-ru.txt')
 stdout_handler = logging.StreamHandler()
-
-fmtMsg = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
 fmtStdout = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
-
-logMsg_handler.setFormatter(fmtMsg)
 stdout_handler.setFormatter(fmtStdout)
-
-logMsg.addHandler(logMsg_handler)
 logStdout.addHandler(stdout_handler)
 
 # Mapping message type to DTC message object and human readable name
@@ -108,13 +97,23 @@ TYPE_TO_STRUCT_FORMAT = {
     10: "s"  # CPPTYPE_MESSAGE; TODO: this is an assumption, needs review
 }
 
-def create_logger(logfile):
+def create_logprc(logfile):
     """Create custom logger with own logfile for each DTC Request function"""
-    logRec = logging.getLogger('Req')
+    logRec = logging.getLogger('Price')
     logRec.setLevel(logging.DEBUG)
-    logRec_handler = logging.FileHandler(logfile)
-    fmtRec = logging.Formatter("%(asctime)s, %(message)s")
-    logRec_handler.setFormatter(fmtRec)
+    logRec_handler = logging.FileHandler(logfile+'_price')
+    fmt = logging.Formatter("%(asctime)s, %(message)s")
+    logRec_handler.setFormatter(fmt)
+    logRec.addHandler(logRec_handler)
+    return logRec
+
+def create_loggen(logfile):
+    """Create custom logger with own logfile for each DTC Request function"""
+    logRec = logging.getLogger('General_Message')
+    logRec.setLevel(logging.DEBUG)
+    logRec_handler = logging.FileHandler(logfile+'_general')
+    fmt = logging.Formatter("%(asctime)s : %(levelname)s : %(funcName)s : %(message)s")
+    logRec_handler.setFormatter(fmt)
     logRec.addHandler(logRec_handler)
     return logRec
 
@@ -126,8 +125,8 @@ def create_mktdat_req(symbolID, symbol, exchange):
     data_req.Exchange = exchange
     return data_req
 
-async def heartbeater(client_stream, heartbeat_interval):
-    logMsg.debug("Heartbeater started")
+async def heartbeater(client_stream, heartbeat_interval, loggen):
+    loggen.debug("Heartbeater started")
     hrtbt = Dtc.Heartbeat()
     while True:
         logStdout.info('Sending Heartbeat')
@@ -146,20 +145,20 @@ async def send_message(m, m_type, client_stream):
     await client_stream.send_all(header + binary_message)
     logStdout.info("Sent : %s", m_type)
         
-async def mkt_updater(client_stream, logGer):
-    logMsg.debug("mkt_updater started")
+async def mkt_updater(client_stream, loggen,logprc):
+    loggen.debug("mkt_updater started")
     logStdout.info("mkt_updater started")
     buflen = 300
     buf = []
     while True:
         mtype, data = await get_response(client_stream)
-        if mtype != Dtc.HEARTBEAT:
+        if mtype != 'HEARTBEAT':
             data = chekker2(data)
-            logGer.info("%s, %s",mtype,data)
+            logprc.info("%s, %s",mtype,data)
         await trio.sleep(0.001)
-        # if not data:
-        #     logMsg.info("mkt_updater: connection closed")
-        #     sys.exit()
+            # if not data:
+            #     loggen.info("mkt_updater: connection closed")
+            #     sys.exit()
 
 async def get_response(client_stream):
     header = await client_stream.receive_some(4)
@@ -183,31 +182,32 @@ async def keyboard():
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSANOW, stashed_term)
 
-async def trigger(event,scope, sock):
-    logMsg.info("  trigger waiting now...")
+async def trigger(event,scope, sock, loggen):
+    loggen.info("  trigger waiting now...")
     logStdout.info("  trigger waiting now...")
     await event.wait()
     """ Gracefully logoff and close the connection """
-    logMsg.info(" QUIT!!! : Gracefully logoff and close the connection ")
+    loggen.info(" QUIT!!! : Gracefully logoff and close the connection ")
     logStdout.info(" QUIT!!! : Gracefully logoff and close the connection ")
     logoff = Dtc.Logoff()
     logoff.Reason = "John-Client quit"
     await send_message(logoff, Dtc.LOGOFF, sock)
-    logMsg.info('--------------------------------------------------------------')
+    loggen.info('--------------------------------------------------------------')
     logStdout.info('--------------------------------------------------------------')
     scope.cancel()
 
 async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbeat_interval=10):
     event = trio.Event()
-    logGer = create_logger(logfile)
-    logMsg.info(f"parent: connecting to {addr[0]}:{addr[1]}")
+    logprc = create_logprc(logfile)
+    loggen = create_loggen(logfile)
+    loggen.info(f"parent: connecting to {addr[0]}:{addr[1]}")
     logStdout.info(f"parent: connecting to {addr[0]}:{addr[1]}")
     client_stream = await trio.open_tcp_stream(addr[0], addr[1])
     # client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], ssl_context=ssl.SSLContext())
 
     async with client_stream:
         # encoding request
-        logMsg.info("spawing encoding request ...")
+        loggen.info("spawing encoding request ...")
         # construct encoding request
         enc_req = Dtc.EncodingRequest()
         enc_req.Encoding = encoding
@@ -215,10 +215,10 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
         enc_req.ProtocolVersion = Dtc.CURRENT_VERSION
         await send_message(enc_req, Dtc.ENCODING_REQUEST,client_stream) # send encoding request
         response = await get_response(client_stream)
-        logMsg.info("%s ", response)
+        loggen.info("%s ", response)
 
         # # logon request
-        logMsg.info("parent: spawing logon request ...")
+        loggen.info("parent: spawing logon request ...")
         logon_req = Dtc.LogonRequest()
         logon_req.ProtocolVersion = Dtc.CURRENT_VERSION
         # logon_req.Username = "wat"
@@ -228,28 +228,28 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
         logon_req.ClientName = "John_Tester"
         await send_message(logon_req, Dtc.LOGON_REQUEST, client_stream)
         response = await get_response(client_stream)
-        logMsg.info("%s ", response)
+        loggen.info("%s ", response)
 
         # Start nursery
         async with trio.open_nursery() as nursery:
             # trigger
-            logMsg.info("parent: spawning trigger...")
-            nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream)
-            logMsg.info("spawned trigger ...")
+            loggen.info("parent: spawning trigger...")
+            nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream, loggen)
+            loggen.info("spawned trigger ...")
 
             # mkt data request
             for m in symbols:    
                 data_req = create_mktdat_req(*m)
                 await send_message(data_req, Dtc.MARKET_DATA_REQUEST, client_stream)
                 response = await get_response(client_stream)
-                logMsg.info("%s ", response)
+                loggen.info("%s ", response)
 
 
-            logMsg.info("parent: spawning heartbeater ...")
-            nursery.start_soon(heartbeater, client_stream, heartbeat_interval)
+            loggen.info("parent: spawning heartbeater ...")
+            nursery.start_soon(heartbeater, client_stream, heartbeat_interval, loggen)
 
-            logMsg.info("parent: spawning mkt_updater ...")
-            nursery.start_soon(mkt_updater, client_stream, logGer)
+            loggen.info("parent: spawning mkt_updater ...")
+            nursery.start_soon(mkt_updater, client_stream, loggen, logprc)
 
             # -- NEW
             async for key in keyboard():
@@ -257,13 +257,13 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
                     # nursery.cancel_scope.cancel()
                     event.set()
                     
-            logMsg.info("parent: waiting for tasks to finish...")
+            loggen.info("parent: waiting for tasks to finish...")
             logStdout.info("parent: waiting for tasks to finish...")
 
-        logMsg.info("  Logoff Successful!!!")
+        loggen.info("  Logoff Successful!!!")
         logStdout.info("  Logoff Successful!!!")
 
-    logMsg.info("  Socket Closed!!! --------------------------------------------------------")
+    loggen.info("  Socket Closed!!! --------------------------------------------------------")
     logStdout.info("  Socket Closed!!!------------------------------------------------------")
 
 
@@ -273,4 +273,4 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
 # encoding = Dtc.BINARY_ENCODING
 # heartbeat_interval = 10
 
-# trio.run(dtc_livelog1.parent, addr1, sym, "test_livelog1.txt")
+# trio.run(dtc_livelog1.parent, addr1, sym, "test_livelog1")
