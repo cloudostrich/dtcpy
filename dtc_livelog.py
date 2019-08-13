@@ -133,9 +133,9 @@ async def heartbeater(client_stream, heartbeat_interval):
         await send_message(hrtbt, Dtc.HEARTBEAT,client_stream)
         await trio.sleep(heartbeat_interval)
 
-def chekker2(m):
-    pktp = tuple(getattr(m,f.name) for f in m.DESCRIPTOR.fields)
-    return pktp
+# def chekker2(m):
+#     pktp = tuple(getattr(m,f.name) for f in m.DESCRIPTOR.fields)
+#     return pktp
 
 async def send_message(m, m_type, client_stream):
     total_len = 4 + m.ByteSize()
@@ -153,8 +153,9 @@ async def mkt_updater(client_stream, logprc):
     while True:
         mtype, data = await get_response(client_stream)
         if mtype != 'HEARTBEAT':
-            data = chekker2(data)
-            logprc.info("%s, %s",mtype,data)
+            data = [getattr(data,f.name) for f in data.DESCRIPTOR.fields]
+            data.append(mtype)
+            logprc.info("%s",data)
         await trio.sleep(0.001)
             # if not data:
             #     loggen.info("mkt_updater: connection closed")
@@ -200,8 +201,8 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
     event = trio.Event()
     logprc = create_logprc(logfile)
     loggen = create_loggen(logfile)
-    loggen.info(f"parent: connecting to {addr[0]}:{addr[1]}")
-    logStdout.info(f"parent: connecting to {addr[0]}:{addr[1]}")
+    loggen.info(f"connecting to {addr[0]}:{addr[1]}")
+    logStdout.info(f"connecting to {addr[0]}:{addr[1]}")
     client_stream = await trio.open_tcp_stream(addr[0], addr[1])
     # client_stream = await trio.open_ssl_over_tcp_stream(addr[0], addr[1], ssl_context=ssl.SSLContext())
 
@@ -218,7 +219,7 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
         loggen.info("%s ", response)
 
         # # logon request
-        loggen.info("parent: spawing logon request ...")
+        loggen.info("spawing logon request ...")
         logon_req = Dtc.LogonRequest()
         logon_req.ProtocolVersion = Dtc.CURRENT_VERSION
         # logon_req.Username = "wat"
@@ -233,11 +234,12 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
         # Start nursery
         async with trio.open_nursery() as nursery:
             # trigger
-            loggen.info("parent: spawning trigger...")
+            loggen.info("spawning trigger...")
             nursery.start_soon(trigger, event, nursery.cancel_scope, client_stream, loggen)
             loggen.info("spawned trigger ...")
 
             # mkt data request
+            loggen.info("spawning mkt data request ...")
             for m in symbols:    
                 data_req = create_mktdat_req(*m)
                 await send_message(data_req, Dtc.MARKET_DATA_REQUEST, client_stream)
@@ -245,10 +247,10 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
                 loggen.info("%s ", response)
 
 
-            loggen.info("parent: spawning heartbeater ...")
+            loggen.info("spawning heartbeater ...")
             nursery.start_soon(heartbeater, client_stream, heartbeat_interval)
 
-            loggen.info("parent: spawning mkt_updater ...")
+            loggen.info("spawning mkt_updater ...")
             nursery.start_soon(mkt_updater, client_stream, logprc)
 
             # -- NEW
@@ -257,8 +259,8 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
                     # nursery.cancel_scope.cancel()
                     event.set()
                     
-            loggen.info("parent: waiting for tasks to finish...")
-            logStdout.info("parent: waiting for tasks to finish...")
+            loggen.info("waiting for tasks to finish...")
+            logStdout.info("waiting for tasks to finish...")
 
         loggen.info("  Logoff Successful!!!")
         logStdout.info("  Logoff Successful!!!")
