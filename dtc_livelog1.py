@@ -153,8 +153,9 @@ async def mkt_updater(client_stream, logGer):
     buf = []
     while True:
         mtype, data = await get_response(client_stream)
-        data = chekker2(data)
-        logGer.info("%s, %s",mtype,data)
+        if mtype != Dtc.HEARTBEAT:
+            data = chekker2(data)
+            logGer.info("%s, %s",mtype,data)
         await trio.sleep(0.001)
         # if not data:
         #     logMsg.info("mkt_updater: connection closed")
