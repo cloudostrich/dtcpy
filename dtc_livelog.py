@@ -125,8 +125,8 @@ def create_mktdat_req(symbolID, symbol, exchange):
     data_req.Exchange = exchange
     return data_req
 
-async def heartbeater(client_stream, heartbeat_interval, loggen):
-    loggen.debug("Heartbeater started")
+async def heartbeater(client_stream, heartbeat_interval):
+    # loggen.debug("Heartbeater started")
     hrtbt = Dtc.Heartbeat()
     while True:
         logStdout.info('Sending Heartbeat')
@@ -145,8 +145,8 @@ async def send_message(m, m_type, client_stream):
     await client_stream.send_all(header + binary_message)
     logStdout.info("Sent : %s", m_type)
         
-async def mkt_updater(client_stream, loggen,logprc):
-    loggen.debug("mkt_updater started")
+async def mkt_updater(client_stream, logprc):
+    # loggen.debug("mkt_updater started")
     logStdout.info("mkt_updater started")
     buflen = 300
     buf = []
@@ -246,10 +246,10 @@ async def parent(addr, symbols, logfile, encoding=Dtc.PROTOCOL_BUFFERS, heartbea
 
 
             loggen.info("parent: spawning heartbeater ...")
-            nursery.start_soon(heartbeater, client_stream, heartbeat_interval, loggen)
+            nursery.start_soon(heartbeater, client_stream, heartbeat_interval)
 
             loggen.info("parent: spawning mkt_updater ...")
-            nursery.start_soon(mkt_updater, client_stream, loggen, logprc)
+            nursery.start_soon(mkt_updater, client_stream, logprc)
 
             # -- NEW
             async for key in keyboard():
