@@ -3,7 +3,7 @@ import sys
 import trio
 import struct
 import logging
-import DTC_Files.DTCProtocol_pb2 as Dtc
+import dtcpy.DTC_Files.DTCProtocol_pb2 as Dtc
 import termios, tty
 # import ssl
 # import subprocess
@@ -201,10 +201,12 @@ async def keyboard():
     try:
         tty.setcbreak(sys.stdin, termios.TCSANOW)
         while True:
-            #yield await trio.run_sync_in_worker_thread(sys.stdin.read, 1,cancellable=True)
-            yield await trio.to_thread.run_sync(sys.stdin.read, 1,cancellable=True)
+            yield await trio.run_sync_in_worker_thread(sys.stdin.read, 1,cancellable=True)
+            #yield await trio.to_thread.run_sync(sys.stdin.read, 1,cancellable=True)
+            
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSANOW, stashed_term)
+        
 
 async def trigger(event,scope, sock, loggen, prc_file):
     loggen.info("  trigger waiting now...")
